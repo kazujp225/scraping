@@ -1,0 +1,298 @@
+{
+  "townwork": {
+    "name": "タウンワーク",
+    "base_url": "https://townwork.net",
+    "search_url_pattern": "https://townwork.net/{area}/search/?keyword={keyword}&page={page}",
+    "selectors": {
+      "job_cards": ".jbc-l-main-list__item",
+      "title": ".jbc-c-heading-joblist",
+      "company": ".jbc-c-heading-joblist__catch",
+      "location": ".jbc-c-txt-access",
+      "salary": ".jbc-c-txt-salary",
+      "employment_type": ".jbc-c-label-employment",
+      "detail_link": "a.jbc-c-btn-detail",
+      "phone": ".jbc-c-txt-tel",
+      "address": ".jbc-c-txt-address",
+      "job_description": ".jbc-c-txt-description"
+    },
+    "detail_selectors": {
+      "company_kana": ".company-kana",
+      "postal_code": ".postal-code",
+      "fax": ".fax-number",
+      "recruiter": ".recruiter-name",
+      "recruiter_email": ".recruiter-email",
+      "job_number": ".job-id",
+      "business_content": ".business-description"
+    },
+    "pagination": {
+      "type": "page_number",
+      "param": "page",
+      "start": 1
+    }
+    ,
+    "filters": {
+      "query_params": {
+        "employment_type": "employment",
+        "salary_min": "salary_min",
+        "shift": "shift"
+      },
+      "options": {
+        "employment_type": {
+          "アルバイト": "baito",
+          "パート": "part",
+          "正社員": "full"
+        },
+        "shift": {
+          "日勤": "day",
+          "夜勤": "night"
+        }
+      }
+    }
+  },
+  "baitoru": {
+    "name": "バイトル",
+    "base_url": "https://www.baitoru.com",
+    "search_url_pattern": "https://www.baitoru.com/search/?kw={keyword}&pref={area}&p={page}",
+    "selectors": {
+      "job_cards": ".cassetteRecruit",
+      "title": ".cassetteRecruit__name",
+      "company": ".cassetteRecruit__name em",
+      "location": ".cassetteRecruit__area",
+      "salary": ".cassetteRecruit__salary",
+      "employment_type": ".cassetteRecruit__attribute",
+      "detail_link": "a.cassetteRecruit__name",
+      "phone": ".tel-number",
+      "address": ".address-text"
+    },
+    "detail_selectors": {
+      "company_kana": ".company-name-kana",
+      "postal_code": ".zip-code",
+      "fax": ".fax",
+      "job_number": ".job-code",
+      "business_content": ".business-info"
+    },
+    "pagination": {
+      "type": "page_number",
+      "param": "p",
+      "start": 1
+    }
+  },
+  "indeed": {
+    "name": "Indeed",
+    "base_url": "https://jp.indeed.com",
+    "search_url_pattern": "https://jp.indeed.com/jobs?q={keyword}&l={area}&start={offset}",
+    "selectors": {
+      "job_cards": ".job_seen_beacon",
+      "title": ".jobTitle span",
+      "company": ".companyName",
+      "location": ".companyLocation",
+      "salary": ".salary-snippet",
+      "employment_type": ".metadata",
+      "detail_link": "a.jcs-JobTitle",
+      "job_description": ".job-snippet"
+    },
+    "detail_selectors": {
+      "phone": ".icl-u-lg-mr--sm",
+      "full_description": "#jobDescriptionText",
+      "job_number": ".jobsearch-JobMetadataHeader-item"
+    },
+    "pagination": {
+      "type": "offset",
+      "param": "start",
+      "start": 0,
+      "increment": 10
+    }
+  },
+  "hellowork": {
+    "name": "ハローワーク",
+    "base_url": "https://www.hellowork.mhlw.go.jp",
+    "search_url_pattern": "https://www.hellowork.mhlw.go.jp/kensaku/GECA110010.do?keyword={keyword}&area={area}&pageNumber={page}",
+    "selectors": {
+      "job_cards": ".kyujin-overview",
+      "title": ".kyujin-overview__hd",
+      "company": ".kyujin-overview__employer",
+      "location": ".kyujin-overview__location",
+      "salary": ".kyujin-overview__wage",
+      "detail_link": "a.kyujin-overview__link"
+    },
+    "pagination": {
+      "type": "page_number",
+      "param": "pageNumber",
+      "start": 1
+    }
+  },
+  "mahhabaito": {
+    "name": "マッハバイト",
+    "base_url": "https://j-sen.jp",
+    "search_url_pattern": "https://j-sen.jp/search/?keyword={keyword}&area={area}&page={page}",
+    "selectors": {
+      "job_cards": ".job-list-item",
+      "title": ".job-list-item__title",
+      "company": ".job-list-item__company",
+      "location": ".job-list-item__location",
+      "salary": ".job-list-item__salary",
+      "detail_link": "a.job-list-item__link"
+    },
+    "pagination": {
+      "type": "page_number",
+      "param": "page",
+      "start": 1
+    }
+  },
+  "linebaito": {
+    "name": "LINEバイト",
+    "base_url": "https://baito.line.me",
+    "search_url_pattern": "https://baito.line.me/search?keyword={keyword}&area={area}&page={page}",
+    "selectors": {
+      "job_cards": ".job-card",
+      "title": ".job-card__title",
+      "company": ".job-card__company",
+      "location": ".job-card__location",
+      "salary": ".job-card__salary",
+      "detail_link": "a.job-card__link"
+    },
+    "detail_selectors": {
+      "job_number": ".job-id",
+      "postal_code": ".zip",
+      "phone": ".phone",
+      "company_kana": ".company-kana",
+      "business_content": ".business-description"
+    },
+    "pagination": {
+      "type": "page_number",
+      "param": "page",
+      "start": 1
+    }
+  },
+  "rikunavi": {
+    "name": "リクナビ",
+    "base_url": "https://job.rikunabi.com",
+    "search_url_pattern": "https://job.rikunabi.com/search/?keyword={keyword}&location={area}&page={page}",
+    "selectors": {
+      "job_cards": ".rnn-jobOfferList__item",
+      "title": ".rnn-jobOfferList__title",
+      "company": ".rnn-jobOfferList__company",
+      "location": ".rnn-jobOfferList__location",
+      "salary": ".rnn-jobOfferList__salary",
+      "employment_type": ".rnn-jobOfferList__employment",
+      "detail_link": "a.rnn-jobOfferList__link"
+    },
+    "detail_selectors": {
+      "job_number": ".job-id",
+      "business_content": ".business-description",
+      "postal_code": ".postal-code",
+      "phone": ".contact-tel",
+      "hiring_count": ".hiring-number"
+    },
+    "pagination": {
+      "type": "page_number",
+      "param": "page",
+      "start": 1
+    }
+  },
+  "mynavi": {
+    "name": "マイナビ",
+    "base_url": "https://tenshoku.mynavi.jp",
+    "search_url_pattern": "https://tenshoku.mynavi.jp/list/?keyword={keyword}&location={area}&page={page}",
+    "selectors": {
+      "job_cards": ".cassetteRecruit",
+      "title": ".cassetteRecruit__title",
+      "company": ".cassetteRecruit__name",
+      "location": ".cassetteRecruit__location",
+      "salary": ".cassetteRecruit__salary",
+      "employment_type": ".cassetteRecruit__employment",
+      "detail_link": "a.cassetteRecruit__link"
+    },
+    "detail_selectors": {
+      "job_number": ".job-number",
+      "company_kana": ".company-name-kana",
+      "postal_code": ".zip-code",
+      "phone": ".tel",
+      "business_content": ".business-info"
+    },
+    "pagination": {
+      "type": "page_number",
+      "param": "page",
+      "start": 1
+    }
+  },
+  "entenshoku": {
+    "name": "エン転職",
+    "base_url": "https://employment.en-japan.com",
+    "search_url_pattern": "https://employment.en-japan.com/search/?keyword={keyword}&area={area}&page={page}",
+    "selectors": {
+      "job_cards": ".jobListContent",
+      "title": ".jobListContent__title",
+      "company": ".jobListContent__company",
+      "location": ".jobListContent__location",
+      "salary": ".jobListContent__salary",
+      "employment_type": ".jobListContent__employment",
+      "detail_link": "a.jobListContent__link"
+    },
+    "detail_selectors": {
+      "job_number": ".job-code",
+      "postal_code": ".zip",
+      "phone": ".phone-number",
+      "business_content": ".company-business",
+      "hiring_count": ".recruit-number"
+    },
+    "pagination": {
+      "type": "page_number",
+      "param": "page",
+      "start": 1
+    }
+  },
+  "kaigojob": {
+    "name": "カイゴジョブ",
+    "base_url": "https://www.kaigojob.com",
+    "search_url_pattern": "https://www.kaigojob.com/search?keyword={keyword}&area={area}&page={page}",
+    "selectors": {
+      "job_cards": ".job-list__item",
+      "title": ".job-list__title",
+      "company": ".job-list__company",
+      "location": ".job-list__location",
+      "salary": ".job-list__salary",
+      "employment_type": ".job-list__employment",
+      "detail_link": "a.job-list__link"
+    },
+    "detail_selectors": {
+      "job_number": ".job-id",
+      "postal_code": ".postal-code",
+      "phone": ".contact-phone",
+      "facility_type": ".facility-type",
+      "business_content": ".business-content"
+    },
+    "pagination": {
+      "type": "page_number",
+      "param": "page",
+      "start": 1
+    }
+  },
+  "jobmedley": {
+    "name": "ジョブメドレー",
+    "base_url": "https://job-medley.com",
+    "search_url_pattern": "https://job-medley.com/search/?keyword={keyword}&area={area}&page={page}",
+    "selectors": {
+      "job_cards": ".job-item",
+      "title": ".job-item__title",
+      "company": ".job-item__company",
+      "location": ".job-item__location",
+      "salary": ".job-item__salary",
+      "employment_type": ".job-item__employment",
+      "detail_link": "a.job-item__link"
+    },
+    "detail_selectors": {
+      "job_number": ".job-number",
+      "postal_code": ".zip-code",
+      "phone": ".tel",
+      "facility_name": ".facility-name",
+      "business_content": ".business-info",
+      "job_category": ".job-category"
+    },
+    "pagination": {
+      "type": "page_number",
+      "param": "page",
+      "start": 1
+    }
+  }
+}

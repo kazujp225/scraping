@@ -1,0 +1,75 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Playwright
+playwright/.local-browsers/
+
+# Data
+data/output/*.csv
+data/output/*.xlsx
+data/output/*.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Environment
+.env
+.env.local
+.env.production
+
+# Node.js / React
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+frontend/dist/
+frontend/build/
+
+# Scraping results
+*.json
+!config/*.json
+!frontend/package.json
+!frontend/tsconfig*.json
+*.xlsx
+*.png
+export_*.json
+export_*.xlsx
+screenshot_*.png
+indeed_jobs_*.json
+yahoo_jobs_*.json
+test_*.png
+error*.png
