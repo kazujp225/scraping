@@ -129,7 +129,8 @@ async def create_stealth_context(browser, user_agent: str = None, proxy: Dict = 
     if block_resources:
         async def setup_route_blocking(page: Page):
             """不要なリソースをブロックするルートを設定"""
-            blocked_types = {'image', 'media', 'font', 'stylesheet'}
+            # stylesheetはブロックしない（CSSクラス名のセレクタに必要）
+            blocked_types = {'image', 'media', 'font'}
             blocked_extensions = {'.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.ico',
                                   '.mp4', '.webm', '.avi', '.mov', '.mp3', '.wav',
                                   '.woff', '.woff2', '.ttf', '.otf', '.eot'}

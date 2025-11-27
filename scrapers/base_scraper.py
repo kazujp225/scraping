@@ -163,8 +163,17 @@ class BaseScraper(ABC):
                 self.error_counter.record_failure(ValueError("No job_cards selector"))
                 return jobs
 
-            # セレクタが存在するか確認（タイムアウト短縮）
-            if not await PageUtils.verify_selector(page, job_cards_selector, timeout=5000):
+            # セレクタが存在するか確認（JSレンダリング待機のため長めに設定）
+            # 最初の試行
+            selector_found = await PageUtils.verify_selector(page, job_cards_selector, timeout=15000)
+
+            # 見つからない場合、追加待機してリトライ
+            if not selector_found:
+                logger.info("First selector check failed, waiting and retrying...")
+                await asyncio.sleep(3)
+                selector_found = await PageUtils.verify_selector(page, job_cards_selector, timeout=10000)
+
+            if not selector_found:
                 logger.warning(f"Job cards selector not found: {job_cards_selector}")
                 # デバッグ用スクリーンショット
                 screenshot_path = f"data/screenshots/no_selector_{self.site_name}_{asyncio.get_event_loop().time()}.png"

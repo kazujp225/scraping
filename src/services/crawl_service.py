@@ -109,18 +109,12 @@ class CrawlService:
             # データベースに保存
             saved_count = 0
             new_count = 0
-            saved_jobs = []
-            saved_job_ids = []
             for job in jobs:
                 try:
                     job['crawled_at'] = datetime.now()
                     # 既存チェック
                     existing = self._check_existing(job)
-                    job_id = self.job_repository.save_job(job, "townwork")
-
-                    saved_job_ids.append(job_id)
-                    # UI表示用に整形したレコードを保持（DBから再読込しなくて済むように）
-                    saved_jobs.append(self._prepare_job_record(job))
+                    self.job_repository.save_job(job, "townwork")
 
                     saved_count += 1
                     if not existing:
@@ -130,14 +124,8 @@ class CrawlService:
 
             result['saved_count'] = saved_count
             result['new_count'] = new_count
-            if saved_job_ids:
-                try:
-                    result['jobs'] = self.job_repository.get_jobs_by_ids(saved_job_ids)
-                except Exception as e:
-                    logger.warning(f"Failed to fetch saved jobs by id: {e}")
-                    result['jobs'] = saved_jobs
-            else:
-                result['jobs'] = saved_jobs
+            # 今回取得した全データをそのまま返す（DB保存の成否に関係なく）
+            result['jobs'] = [self._prepare_job_record(job) for job in jobs]
 
             self._report_progress(f"保存完了: {saved_count}件（新着: {new_count}件）", 2, 2)
 

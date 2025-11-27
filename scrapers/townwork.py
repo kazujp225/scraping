@@ -4,7 +4,7 @@
 """
 from typing import Dict, Any, List, Optional
 from urllib.parse import urlparse, urlunparse, parse_qsl, urlencode
-from playwright.async_api import Page, Browser
+from playwright.async_api import Page, Browser, TimeoutError as PlaywrightTimeoutError
 from .base_scraper import BaseScraper
 import logging
 import re
@@ -109,10 +109,16 @@ class TownworkScraper(BaseScraper):
                     logger.warning(f"Page not found: {url}")
                     break
 
-                await page.wait_for_timeout(2000)  # ページ読み込み待機
+                # カードセレクタが現れるまで短めに待機し、成功時は即処理に進む
+                card_selector = self.selectors.get("job_cards", "[class*='jobCard']")
+                try:
+                    await page.wait_for_selector(card_selector, timeout=1500)
+                except PlaywrightTimeoutError:
+                    logger.warning(f"Job cards selector timeout on page {page_num}, proceeding with fallback wait")
+                    await page.wait_for_timeout(400)
 
                 # 求人カードを取得
-                job_cards = await page.query_selector_all(self.selectors.get("job_cards", "[class*='jobCard']"))
+                job_cards = await page.query_selector_all(card_selector)
 
                 if not job_cards:
                     logger.info(f"No more jobs found on page {page_num}")

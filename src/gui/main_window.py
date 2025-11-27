@@ -40,12 +40,13 @@ class CrawlWorker(QThread):
     error = pyqtSignal(str)
     time_update = pyqtSignal(float, int, int)  # elapsed_time, scraped_count, saved_count
 
-    def __init__(self, service: CrawlService, keywords: List[str], areas: List[str], max_pages: int):
+    def __init__(self, service: CrawlService, keywords: List[str], areas: List[str], max_pages: int, parallel: int):
         super().__init__()
         self.service = service
         self.keywords = keywords
         self.areas = areas
         self.max_pages = max_pages
+        self.parallel = parallel
 
     def run(self):
         try:
@@ -90,7 +91,8 @@ class CrawlWorker(QThread):
                         self.service.crawl_townwork(
                             keywords=[kw],
                             areas=[area],
-                            max_pages=self.max_pages
+                            max_pages=self.max_pages,
+                            parallel=self.parallel
                         )
                     )
 
@@ -459,13 +461,21 @@ class MainWindow(QMainWindow):
 
         # 検索オプション
         option_group = QGroupBox("検索オプション")
-        option_layout = QHBoxLayout(option_group)
-        option_layout.addWidget(QLabel("最大ページ数:"))
+        option_layout = QGridLayout(option_group)
+        option_layout.setColumnStretch(2, 1)
+
+        option_layout.addWidget(QLabel("最大ページ数:"), 0, 0)
         self.max_pages_spin = QSpinBox()
         self.max_pages_spin.setRange(1, 20)
         self.max_pages_spin.setValue(5)
-        option_layout.addWidget(self.max_pages_spin)
-        option_layout.addStretch()
+        option_layout.addWidget(self.max_pages_spin, 0, 1)
+
+        option_layout.addWidget(QLabel("並列数:"), 1, 0)
+        self.parallel_spin = QSpinBox()
+        self.parallel_spin.setRange(1, 12)
+        self.parallel_spin.setValue(5)
+        option_layout.addWidget(self.parallel_spin, 1, 1)
+
         layout.addWidget(option_group)
 
         # フィルタ設定
@@ -754,6 +764,7 @@ class MainWindow(QMainWindow):
             return
 
         max_pages = self.max_pages_spin.value()
+        parallel = self.parallel_spin.value()
 
         # 確認ダイアログ
         total_combinations = len(keywords) * len(areas)
@@ -778,7 +789,7 @@ class MainWindow(QMainWindow):
         self.time_label.setText("経過時間: 0秒 | 取得: 0件 | 保存: 0件")
         self.statusBar.showMessage(f"クローリング中... ({len(keywords)}キーワード x {len(areas)}地域)")
 
-        self.crawl_worker = CrawlWorker(self.service, keywords, areas, max_pages)
+        self.crawl_worker = CrawlWorker(self.service, keywords, areas, max_pages, parallel)
         self.crawl_worker.finished.connect(self.on_crawl_finished)
         self.crawl_worker.progress.connect(self.on_crawl_progress)
         self.crawl_worker.error.connect(self.on_crawl_error)
@@ -850,7 +861,8 @@ class MainWindow(QMainWindow):
             }
         """)
 
-        jobs = result.get('jobs') or self.service.job_repository.get_jobs(source_name="townwork", limit=1000)
+        # 今回のスクレイピング結果のみを表示（過去のDB結果は含めない）
+        jobs = result.get('jobs', [])
         self.current_jobs = jobs
         self.update_results_table(jobs)
         self.load_stats({

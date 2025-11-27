@@ -34,15 +34,15 @@ class PageUtils:
             # DOMContentLoadedを待つ
             await page.wait_for_load_state("domcontentloaded", timeout=timeout)
 
-            # ネットワークアイドルを短時間待つ（2秒で打ち切り）
+            # ネットワークアイドルを待つ（Next.js等のSPAのJSレンダリングを待機）
             if wait_for_network_idle:
                 try:
-                    await page.wait_for_load_state("networkidle", timeout=2000)
+                    await page.wait_for_load_state("networkidle", timeout=5000)
                 except PlaywrightTimeoutError:
                     pass  # タイムアウトは無視して続行
 
-            # 追加の待機（0.5秒）
-            await asyncio.sleep(0.5)
+            # JavaScriptレンダリング完了を待つ（追加の待機）
+            await asyncio.sleep(2.0)
 
             logger.debug("Page fully loaded")
             return True
@@ -92,7 +92,7 @@ class PageUtils:
     async def verify_selector(
         page: Page,
         selector: str,
-        timeout: int = 3000
+        timeout: int = 10000
     ) -> bool:
         """
         セレクタが存在するか検証
@@ -100,14 +100,14 @@ class PageUtils:
         Args:
             page: Playwrightページ
             selector: CSSセレクタ
-            timeout: タイムアウト（ミリ秒）- 短縮済み
+            timeout: タイムアウト（ミリ秒）
 
         Returns:
             セレクタが見つかったかどうか
         """
         try:
-            # state="attached"に変更（visibleより高速）
-            await page.wait_for_selector(selector, timeout=timeout, state="attached")
+            # visibleを使用してJSレンダリング完了を待機
+            await page.wait_for_selector(selector, timeout=timeout, state="visible")
             logger.debug(f"Selector found: {selector}")
             return True
         except PlaywrightTimeoutError:
