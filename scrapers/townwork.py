@@ -90,6 +90,20 @@ class TownworkScraper(BaseScraper):
         url_pattern = self.site_config.get("search_url_pattern")
         base_url = url_pattern.format(area=area_code, keyword=keyword, page=page)
 
+        # 新着順パラメータを付与（デフォルト: sort=1）
+        sort_conf = self.site_config.get("sort", {})
+        sort_param = sort_conf.get("param")
+        sort_newest = sort_conf.get("newest")
+
+        if sort_param and sort_newest is not None:
+            from urllib.parse import urlparse, parse_qsl, urlencode, urlunparse
+
+            parsed = urlparse(base_url)
+            query = dict(parse_qsl(parsed.query))
+            query[sort_param] = sort_newest
+            new_query = urlencode(query)
+            base_url = urlunparse((parsed.scheme, parsed.netloc, parsed.path, parsed.params, new_query, parsed.fragment))
+
         return base_url
 
     async def search_jobs(self, page: Page, keyword: str, area: str, max_pages: int = 5) -> List[Dict[str, Any]]:
@@ -102,47 +116,95 @@ class TownworkScraper(BaseScraper):
             url = self.generate_search_url(keyword, area, page_num)
             logger.info(f"Fetching page {page_num}: {url}")
 
-            try:
-                response = await page.goto(url, wait_until="networkidle", timeout=30000)
-
-                if response and response.status == 404:
-                    logger.warning(f"Page not found: {url}")
-                    break
-
-                # カードセレクタが現れるまで短めに待機し、成功時は即処理に進む
-                card_selector = self.selectors.get("job_cards", "[class*='jobCard']")
+            success = False
+            # ページ取得・抽出をリトライ（最大2回）し、取りこぼしを減らす
+            for attempt in range(2):
                 try:
-                    await page.wait_for_selector(card_selector, timeout=1500)
-                except PlaywrightTimeoutError:
-                    logger.warning(f"Job cards selector timeout on page {page_num}, proceeding with fallback wait")
-                    await page.wait_for_timeout(400)
+                    response = await page.goto(
+                        url,
+                        wait_until="networkidle",
+                        timeout=30000 if attempt == 0 else 40000  # 2回目は少し長めに待つ
+                    )
 
-                # 求人カードを取得
-                job_cards = await page.query_selector_all(card_selector)
+                    if response and response.status == 404:
+                        logger.warning(f"Page not found: {url}")
+                        break
 
-                if not job_cards:
-                    logger.info(f"No more jobs found on page {page_num}")
-                    break
+                    card_selector = self.selectors.get("job_cards", "[class*='jobCard']")
 
-                logger.info(f"Found {len(job_cards)} jobs on page {page_num}")
+                    # カードが描画されるまで数回リトライし、描画遅延による取りこぼしを減らす
+                    selector_ready = False
+                    for sel_attempt in range(4):
+                        try:
+                            await page.wait_for_selector(card_selector, timeout=2000 + 500 * sel_attempt)
+                            selector_ready = True
+                            break
+                        except PlaywrightTimeoutError:
+                            logger.warning(
+                                f"Job cards selector timeout on page {page_num} (attempt {sel_attempt + 1}/4). Retrying after short wait."
+                            )
+                            await page.wait_for_timeout(600 + 200 * sel_attempt)
 
-                for card in job_cards:
-                    try:
-                        job_data = await self._extract_card_data(card)
-                        if job_data:
-                            all_jobs.append(job_data)
-                    except Exception as e:
-                        logger.error(f"Error extracting job card: {e}")
+                    if not selector_ready:
+                        logger.warning(
+                            f"Job cards selector not ready on page {page_num}; attempt {attempt + 1}/2. Retrying page if attempts remain."
+                        )
+                        if attempt == 0:
+                            continue  # もう一度このページをやり直す
+
+                    # 求人カードを取得
+                    job_cards = await page.query_selector_all(card_selector)
+
+                    # 0件の場合は短い待機のあと再取得（描画遅延対策）
+                    if len(job_cards) == 0:
+                        await page.wait_for_timeout(1000)
+                        job_cards = await page.query_selector_all(card_selector)
+
+                    # それでも0件なら別のリトライ機会があればやり直す
+                    if len(job_cards) == 0:
+                        logger.warning(f"No job cards found on page {page_num} (attempt {attempt + 1}/2).")
+                        if attempt == 0:
+                            await page.wait_for_timeout(1200)
+                            continue
+                        else:
+                            logger.info(f"No jobs on page {page_num} after retries; stopping.")
+                            success = True  # これ以上ないので終了扱い
+                            break
+
+                    logger.info(f"Found {len(job_cards)} jobs on page {page_num} (attempt {attempt + 1})")
+
+                    for card in job_cards:
+                        try:
+                            job_data = await self._extract_card_data(card)
+                            if job_data:
+                                all_jobs.append(job_data)
+                        except Exception as e:
+                            logger.error(f"Error extracting job card: {e}")
+                            continue
+
+                    success = True
+                    break  # ページ処理成功
+
+                except Exception as e:
+                    logger.error(f"Error fetching page {page_num} (attempt {attempt + 1}/2): {e}")
+                    if attempt == 0:
+                        await page.wait_for_timeout(1500)
                         continue
+                    else:
+                        break
 
-                # 次のページがあるか確認
-                next_page = await page.query_selector(f"[class*='pageButton']:has-text('{page_num + 1}')")
-                if not next_page:
-                    logger.info("No more pages available")
-                    break
+            if not success:
+                break
 
-            except Exception as e:
-                logger.error(f"Error fetching page {page_num}: {e}")
+            # 次のページがあるか確認（見えなくても最大ページ数までは試行し、取りこぼしを減らす）
+            next_page = await page.query_selector(f"[class*='pageButton']:has-text('{page_num + 1}')")
+            if not next_page and page_num < max_pages:
+                logger.warning(
+                    f"Next page button not found for page {page_num}, but continuing to page {page_num + 1} to avoid missing results."
+                )
+                continue
+            if not next_page:
+                logger.info("No more pages available")
                 break
 
         return all_jobs
@@ -154,11 +216,17 @@ class TownworkScraper(BaseScraper):
         try:
             data = {}
 
-            # 詳細ページへのリンク
+            # 詳細ページへのリンク（カード自体 or 内部のanchor）
             href = await card.get_attribute("href")
+            if not href:
+                link_elem = await card.query_selector("a[href*='jobid_'], a[href^='/jobid_'], a[href*='job/'], a[href]")
+                if link_elem:
+                    href = await link_elem.get_attribute("href")
             if href:
                 if href.startswith("/"):
                     href = f"https://townwork.net{href}"
+                # クエリやフラグメントで差分が出ないよう正規化
+                href = self._normalize_url(href)
                 data["page_url"] = href
 
                 # 求人IDを抽出
@@ -198,6 +266,17 @@ class TownworkScraper(BaseScraper):
         except Exception as e:
             logger.error(f"Error extracting card data: {e}")
             return None
+
+    def _normalize_url(self, url: str) -> str:
+        """クエリ・フラグメントを除去して末尾スラッシュを揃える"""
+        if not url:
+            return ""
+        from urllib.parse import urlparse, urlunparse
+
+        parsed = urlparse(url)
+        path = parsed.path or "/"
+        path = path.rstrip("/") or "/"
+        return urlunparse((parsed.scheme, parsed.netloc, path, "", "", ""))
 
     async def extract_detail_info(self, page: Page, url: str) -> Dict[str, Any]:
         """

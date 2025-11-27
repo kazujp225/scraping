@@ -3,6 +3,10 @@
     "name": "タウンワーク",
     "base_url": "https://townwork.net",
     "search_url_pattern": "https://townwork.net/prefectures/{area}/job_search/?keyword={keyword}&page={page}",
+    "sort": {
+      "param": "sort",
+      "newest": "1"
+    },
     "selectors": {
       "job_cards": "[class*='jobCard']",
       "title": "[class*='title__']",

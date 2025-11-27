@@ -5,6 +5,7 @@
 import asyncio
 from datetime import datetime
 from typing import List, Dict, Any, Optional, Callable
+from collections import Counter
 import logging
 import sys
 import os
@@ -19,6 +20,9 @@ from src.filters.job_filter import JobFilter, FilterResult
 from src.services.csv_exporter import CSVExporter
 
 logger = logging.getLogger(__name__)
+
+# デバッグログフラグ（True: 詳細ログ出力、False: 出力しない）
+DEBUG_JOB_LOG = True
 
 
 class CrawlService:
@@ -51,6 +55,69 @@ class CrawlService:
         if self.progress_callback:
             self.progress_callback(message, current, total)
         logger.info(f"{message} ({current}/{total})")
+
+    def _output_debug_job_log(self, jobs: List[Dict[str, Any]]):
+        """デバッグ用: 取得した全件のjob_idとURLを出力"""
+        import sys
+
+        # ログ出力用のヘルパー関数
+        def log(msg: str):
+            logger.info(msg)
+            print(msg, file=sys.stderr, flush=True)
+
+        log("\n" + "=" * 80)
+        log(f"[DEBUG] 取得求人一覧 (全{len(jobs)}件)")
+        log("=" * 80)
+
+        job_ids = []
+        urls = []
+
+        for i, job in enumerate(jobs, 1):
+            job_id = job.get('job_id') or job.get('job_number') or "N/A"
+            url = job.get('page_url') or job.get('url') or "N/A"
+            title = job.get('job_title') or job.get('title') or "N/A"
+            company = job.get('company_name') or job.get('company') or "N/A"
+
+            job_ids.append(job_id)
+            urls.append(url)
+
+            log(f"{i:3d}. job_id: {job_id}")
+            log(f"     URL: {url}")
+            log(f"     会社: {company[:30]}... | 職種: {title[:30]}...")
+            log("-" * 40)
+
+        # 重複チェック
+        log("\n" + "=" * 80)
+        log("[DEBUG] 重複分析")
+        log("=" * 80)
+
+        # job_id重複
+        job_id_counts = Counter(job_ids)
+        duplicated_job_ids = {k: v for k, v in job_id_counts.items() if v > 1 and k != "N/A"}
+        if duplicated_job_ids:
+            log(f"\n重複job_id ({len(duplicated_job_ids)}種類):")
+            for jid, count in sorted(duplicated_job_ids.items(), key=lambda x: -x[1]):
+                log(f"  {jid}: {count}回")
+        else:
+            log("\njob_idの重複: なし")
+
+        # URL重複
+        url_counts = Counter(urls)
+        duplicated_urls = {k: v for k, v in url_counts.items() if v > 1 and k != "N/A"}
+        if duplicated_urls:
+            log(f"\n重複URL ({len(duplicated_urls)}種類):")
+            for url, count in sorted(duplicated_urls.items(), key=lambda x: -x[1]):
+                log(f"  {url[:60]}...: {count}回")
+        else:
+            log("\nURLの重複: なし")
+
+        # ユニーク数
+        unique_job_ids = len(set(jid for jid in job_ids if jid != "N/A"))
+        unique_urls = len(set(u for u in urls if u != "N/A"))
+        log(f"\n総件数: {len(jobs)}")
+        log(f"ユニークjob_id数: {unique_job_ids}")
+        log(f"ユニークURL数: {unique_urls}")
+        log("=" * 80 + "\n")
 
     async def crawl_townwork(
         self,
@@ -106,11 +173,22 @@ class CrawlService:
             result['scraped_count'] = len(jobs)
             self._report_progress(f"取得完了: {len(jobs)}件", 1, 2)
 
+            # デバッグログ出力
+            if DEBUG_JOB_LOG:
+                self._output_debug_job_log(jobs)
+
             # データベースに保存
             saved_count = 0
             new_count = 0
+            new_urls = []
             for job in jobs:
                 try:
+                    # URL差分（クエリ等）で重複を取り逃さないよう正規化
+                    if job.get('page_url'):
+                        job['page_url'] = self._normalize_url(job['page_url'])
+                    if job.get('url'):
+                        job['url'] = self._normalize_url(job['url'])
+
                     job['crawled_at'] = datetime.now()
                     # 既存チェック
                     existing = self._check_existing(job)
@@ -119,6 +197,7 @@ class CrawlService:
                     saved_count += 1
                     if not existing:
                         new_count += 1
+                        new_urls.append(job.get("page_url") or job.get("url") or "N/A")
                 except Exception as e:
                     logger.warning(f"Failed to save job: {e}")
 
@@ -128,6 +207,13 @@ class CrawlService:
             result['jobs'] = [self._prepare_job_record(job) for job in jobs]
 
             self._report_progress(f"保存完了: {saved_count}件（新着: {new_count}件）", 2, 2)
+
+            # 新規扱いとなったURLをログ出力
+            if new_urls:
+                logger.info("=== 新規扱いURL一覧 ===")
+                for url in new_urls:
+                    logger.info(f"NEW: {url}")
+                logger.info(f"=== 新規URL合計: {len(new_urls)}件 ===")
 
             # クロールログを記録
             self._save_crawl_log(result)
@@ -146,10 +232,20 @@ class CrawlService:
             return False
 
         job_identifier = job.get('job_id') or job.get('job_number')
-        page_url = job.get('page_url') or job.get('url')
+        page_url = self._normalize_url(job.get('page_url') or job.get('url'))
 
         if not job_identifier and not page_url:
-            return False
+            # IDもURLも無い場合は内容ハッシュで近似判定
+            job_identifier = self.job_repository._generate_fallback_id(job)
+        else:
+            # 既存判定時もURL・テキストを正規化した値を使う
+            normalized_job = {
+                "company": job.get("company") or job.get("company_name") or "",
+                "title": job.get("title") or job.get("job_title") or "",
+                "location": job.get("location") or job.get("work_location") or "",
+            }
+            norm_fallback = self.job_repository._generate_fallback_id(normalized_job)
+            job_identifier = job_identifier or norm_fallback
 
         with self.db_manager.get_connection() as conn:
             cursor = conn.cursor()
@@ -164,6 +260,17 @@ class CrawlService:
                 (source_id, job_identifier or page_url, page_url or job_identifier)
             )
             return cursor.fetchone() is not None
+
+    def _normalize_url(self, url: Optional[str]) -> str:
+        """クエリやフラグメントを除去し、末尾スラッシュを揃えたURLに正規化"""
+        if not url:
+            return ""
+        from urllib.parse import urlparse, urlunparse
+
+        parsed = urlparse(url)
+        path = parsed.path or "/"
+        path = path.rstrip("/") or "/"
+        return urlunparse((parsed.scheme, parsed.netloc, path, "", "", ""))
 
     def _prepare_job_record(self, job: Dict[str, Any]) -> Dict[str, Any]:
         """テーブル表示用にキーを正規化"""

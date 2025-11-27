@@ -437,9 +437,10 @@ class MainWindow(QMainWindow):
         # 追加キーワード入力
         custom_group = QGroupBox("追加キーワード")
         custom_layout = QVBoxLayout(custom_group)
-        self.custom_keyword_input = QLineEdit()
+        self.custom_keyword_input = QTextEdit()
         self.custom_keyword_input.setPlaceholderText("カンマ区切りで入力（例: コンサル, マネジメント）")
-        self.custom_keyword_input.setMinimumHeight(36)
+        self.custom_keyword_input.setMinimumHeight(80)
+        self.custom_keyword_input.setMaximumHeight(120)
         custom_layout.addWidget(self.custom_keyword_input)
         layout.addWidget(custom_group)
 
@@ -586,9 +587,9 @@ class MainWindow(QMainWindow):
         keywords = [kw for kw, check in self.keyword_checks.items() if check.isChecked()]
 
         # カスタムキーワードを追加
-        custom = self.custom_keyword_input.text()
+        custom = self.custom_keyword_input.toPlainText()
         if custom:
-            custom_keywords = [k.strip() for k in custom.split(",") if k.strip()]
+            custom_keywords = [k.strip() for k in custom.replace("\n", ",").split(",") if k.strip()]
             keywords.extend(custom_keywords)
 
         return keywords

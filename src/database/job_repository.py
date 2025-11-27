@@ -7,6 +7,8 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Optional, Any
 import re
 import logging
+from urllib.parse import urlparse, urlunparse
+import hashlib
 
 from .db_manager import DatabaseManager
 
@@ -32,6 +34,14 @@ class JobRepository:
         address_parts = self._parse_address(job_data.get('location', ''))
 
         now = datetime.now()
+        normalized_url = self._normalize_url(job_data.get('page_url') or job_data.get('url', ''))
+        job_id_value = (
+            job_data.get('job_id')
+            or job_data.get('job_number')
+            or normalized_url
+            or self._generate_fallback_id(job_data)
+        )
+        page_url_value = normalized_url
 
         with self.db.get_connection() as conn:
             cursor = conn.cursor()
@@ -40,7 +50,7 @@ class JobRepository:
             cursor.execute("""
                 SELECT id, crawled_at FROM jobs
                 WHERE source_id = ? AND job_id = ?
-            """, (source_id, job_data.get('job_id', job_data.get('url', ''))))
+            """, (source_id, job_id_value))
 
             existing = cursor.fetchone()
 
@@ -100,7 +110,7 @@ class JobRepository:
                     job_data.get('hiring_count'),
                     job_data.get('recruiter', ''),
                     job_data.get('recruiter_email', ''),
-                    job_data.get('url', ''),
+                    page_url_value,
                     job_data.get('employee_count'),
                     now,
                     existing['id']
@@ -120,7 +130,7 @@ class JobRepository:
                         employee_count, crawled_at, updated_at, is_new
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
-                    job_data.get('job_id', job_data.get('url', '')),
+                    job_id_value,
                     source_id,
                     job_data.get('company', ''),
                     job_data.get('company_kana', ''),
@@ -145,7 +155,7 @@ class JobRepository:
                     job_data.get('hiring_count'),
                     job_data.get('recruiter', ''),
                     job_data.get('recruiter_email', ''),
-                    job_data.get('url', ''),
+                    page_url_value,
                     job_data.get('employee_count'),
                     now,
                     now,
@@ -273,6 +283,20 @@ class JobRepository:
             cursor.execute(query, params)
             return cursor.fetchone()['count']
 
+    def _generate_fallback_id(self, job_data: Dict[str, Any]) -> str:
+        """job_idもURLもない場合の同一性判定用ハッシュ"""
+        # 変動しやすい給与は除外し、会社名・職種・勤務地で安定したキーを作る
+        def norm(text: str) -> str:
+            return re.sub(r'\s+', ' ', (text or '').strip().lower())
+
+        fields = [
+            norm(job_data.get('company') or job_data.get('company_name') or ''),
+            norm(job_data.get('title') or job_data.get('job_title') or ''),
+            norm(job_data.get('location') or job_data.get('work_location') or ''),
+        ]
+        key = "|".join(fields)
+        return hashlib.md5(key.encode('utf-8')).hexdigest()
+
     def get_new_jobs_since(self, since: datetime, source_name: Optional[str] = None) -> List[Dict[str, Any]]:
         """指定日時以降の新着求人を取得"""
         with self.db.get_connection() as conn:
@@ -314,6 +338,15 @@ class JobRepository:
             cursor.execute("DELETE FROM jobs WHERE crawled_at < ?", (cutoff,))
             conn.commit()
             return cursor.rowcount
+
+    def _normalize_url(self, url: str) -> str:
+        """クエリ・フラグメントを除去し、末尾スラッシュを揃えたURLを返す"""
+        if not url:
+            return ""
+        parsed = urlparse(url)
+        path = parsed.path or "/"
+        path = path.rstrip("/") or "/"
+        return urlunparse((parsed.scheme, parsed.netloc, path, "", "", ""))
 
     def _normalize_phone(self, phone: str) -> str:
         """電話番号を正規化（数字のみ）"""

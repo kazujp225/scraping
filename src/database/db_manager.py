@@ -16,112 +16,13 @@ class DatabaseManager:
     def __init__(self, db_path: str = "data/db/jobs.db"):
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        # DBが消されても再生成できるよう、初期化状態を持たない（接続時に検査する）
         self._init_database()
 
     def _init_database(self):
         """データベースを初期化"""
         with self.get_connection() as conn:
-            cursor = conn.cursor()
-
-            # 媒体マスタテーブル
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS sources (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    name VARCHAR(50) NOT NULL UNIQUE,
-                    display_name VARCHAR(100),
-                    base_url VARCHAR(200),
-                    is_active BOOLEAN DEFAULT 1,
-                    priority INTEGER DEFAULT 0,
-                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-                )
-            """)
-
-            # 求人情報テーブル
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS jobs (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    job_id VARCHAR(100) NOT NULL,
-                    source_id INTEGER NOT NULL,
-                    company_name VARCHAR(200) NOT NULL,
-                    company_name_kana VARCHAR(200),
-                    postal_code VARCHAR(8),
-                    address_pref VARCHAR(10),
-                    address_city VARCHAR(50),
-                    address_detail VARCHAR(200),
-                    phone_number VARCHAR(20),
-                    phone_number_normalized VARCHAR(15),
-                    fax_number VARCHAR(20),
-                    job_title VARCHAR(200) NOT NULL,
-                    employment_type VARCHAR(50),
-                    salary VARCHAR(100),
-                    salary_min INTEGER,
-                    salary_max INTEGER,
-                    working_hours VARCHAR(200),
-                    holidays VARCHAR(500),
-                    work_location VARCHAR(500),
-                    business_description TEXT,
-                    job_description TEXT,
-                    requirements TEXT,
-                    hiring_count INTEGER,
-                    contact_person VARCHAR(100),
-                    contact_email VARCHAR(200),
-                    page_url VARCHAR(500) NOT NULL,
-                    employee_count INTEGER,
-                    established_year INTEGER,
-                    capital BIGINT,
-                    posted_date DATE,
-                    expire_date DATE,
-                    crawled_at DATETIME NOT NULL,
-                    updated_at DATETIME NOT NULL,
-                    is_new BOOLEAN DEFAULT 1,
-                    is_filtered BOOLEAN DEFAULT 0,
-                    filter_reason VARCHAR(100),
-                    UNIQUE(source_id, job_id),
-                    FOREIGN KEY (source_id) REFERENCES sources(id)
-                )
-            """)
-
-            # クロールログテーブル
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS crawl_logs (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    source_id INTEGER NOT NULL,
-                    keyword VARCHAR(100),
-                    area VARCHAR(100),
-                    status VARCHAR(20) NOT NULL,
-                    total_count INTEGER DEFAULT 0,
-                    new_count INTEGER DEFAULT 0,
-                    error_message TEXT,
-                    started_at DATETIME,
-                    finished_at DATETIME,
-                    FOREIGN KEY (source_id) REFERENCES sources(id)
-                )
-            """)
-
-            # 検索条件保存テーブル
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS search_conditions (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    name VARCHAR(100) NOT NULL,
-                    conditions TEXT NOT NULL,
-                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-                )
-            """)
-
-            # インデックス作成
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_jobs_phone ON jobs(phone_number_normalized)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_jobs_crawled ON jobs(crawled_at)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_jobs_source ON jobs(source_id)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_jobs_pref ON jobs(address_pref)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_jobs_company ON jobs(company_name)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_jobs_new ON jobs(is_new)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_jobs_filtered ON jobs(is_filtered)")
-
-            # デフォルト媒体を登録
-            self._insert_default_sources(cursor)
-
-            conn.commit()
+            self._ensure_schema(conn)
             logger.info(f"Database initialized: {self.db_path}")
 
     def _insert_default_sources(self, cursor):
@@ -150,7 +51,113 @@ class DatabaseManager:
         """データベース接続を取得"""
         conn = sqlite3.connect(str(self.db_path))
         conn.row_factory = sqlite3.Row
+        # DBファイルが消された場合でも接続時にスキーマを作成
+        self._ensure_schema(conn)
         return conn
+
+    def _ensure_schema(self, conn: sqlite3.Connection):
+        """スキーマが無ければ作成（毎回呼んでも冪等）"""
+        cursor = conn.cursor()
+
+        # 媒体マスタテーブル
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS sources (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name VARCHAR(50) NOT NULL UNIQUE,
+                display_name VARCHAR(100),
+                base_url VARCHAR(200),
+                is_active BOOLEAN DEFAULT 1,
+                priority INTEGER DEFAULT 0,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # 求人情報テーブル
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS jobs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                job_id VARCHAR(100) NOT NULL,
+                source_id INTEGER NOT NULL,
+                company_name VARCHAR(200) NOT NULL,
+                company_name_kana VARCHAR(200),
+                postal_code VARCHAR(8),
+                address_pref VARCHAR(10),
+                address_city VARCHAR(50),
+                address_detail VARCHAR(200),
+                phone_number VARCHAR(20),
+                phone_number_normalized VARCHAR(15),
+                fax_number VARCHAR(20),
+                job_title VARCHAR(200) NOT NULL,
+                employment_type VARCHAR(50),
+                salary VARCHAR(100),
+                salary_min INTEGER,
+                salary_max INTEGER,
+                working_hours VARCHAR(200),
+                holidays VARCHAR(500),
+                work_location VARCHAR(500),
+                business_description TEXT,
+                job_description TEXT,
+                requirements TEXT,
+                hiring_count INTEGER,
+                contact_person VARCHAR(100),
+                contact_email VARCHAR(200),
+                page_url VARCHAR(500) NOT NULL,
+                employee_count INTEGER,
+                established_year INTEGER,
+                capital BIGINT,
+                posted_date DATE,
+                expire_date DATE,
+                crawled_at DATETIME NOT NULL,
+                updated_at DATETIME NOT NULL,
+                is_new BOOLEAN DEFAULT 1,
+                is_filtered BOOLEAN DEFAULT 0,
+                filter_reason VARCHAR(100),
+                UNIQUE(source_id, job_id),
+                FOREIGN KEY (source_id) REFERENCES sources(id)
+            )
+        """)
+
+        # クロールログテーブル
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS crawl_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                source_id INTEGER NOT NULL,
+                keyword VARCHAR(100),
+                area VARCHAR(100),
+                status VARCHAR(20) NOT NULL,
+                total_count INTEGER DEFAULT 0,
+                new_count INTEGER DEFAULT 0,
+                error_message TEXT,
+                started_at DATETIME,
+                finished_at DATETIME,
+                FOREIGN KEY (source_id) REFERENCES sources(id)
+            )
+        """)
+
+        # 検索条件保存テーブル
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS search_conditions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name VARCHAR(100) NOT NULL,
+                conditions TEXT NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # インデックス作成
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_jobs_phone ON jobs(phone_number_normalized)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_jobs_crawled ON jobs(crawled_at)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_jobs_source ON jobs(source_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_jobs_pref ON jobs(address_pref)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_jobs_company ON jobs(company_name)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_jobs_new ON jobs(is_new)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_jobs_filtered ON jobs(is_filtered)")
+
+        # デフォルト媒体を登録
+        self._insert_default_sources(cursor)
+
+        conn.commit()
 
     def get_source_id(self, source_name: str) -> int:
         """媒体名からIDを取得"""
